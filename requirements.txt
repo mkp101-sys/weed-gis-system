@@ -1,8 +1,9 @@
 streamlit
 ultralytics
+opencv-python-headless
+pillow
+numpy
+pandas
+gdown
 folium
 streamlit-folium
-gdown
-pillow
-torch
-torchvision
