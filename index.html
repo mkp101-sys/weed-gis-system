@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeedScan — Field Intelligence Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+<style>
+  :root {
+    --soil:      #1a1208;
+    --bark:      #2c1f0e;
+    --moss:      #3a5c2a;
+    --leaf:      #5a8a3a;
+    --lime:      #8ab84a;
+    --sprout:    #b8d878;
+    --cream:     #f5f0e0;
+    --parchment: #ede5cc;
+    --danger:    #c44a2a;
+    --gold:      #d4a843;
+    --panel-bg:  rgba(26,18,8,0.92);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--soil);
+    color: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP NAV ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    height: 56px;
+    background: var(--bark);
+    border-bottom: 1px solid var(--moss);
+    z-index: 1000;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    color: var(--sprout);
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot { width: 10px; height: 10px; background: var(--lime); border-radius: 50%; box-shadow: 0 0 8px var(--lime); }
+
+  .nav-stats {
+    display: flex;
+    gap: 32px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--sprout);
+  }
+  .stat-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .stat-value { font-size: 1.1rem; color: var(--lime); font-weight: 500; }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--sprout);
+    background: rgba(90,138,58,0.15);
+    border: 1px solid var(--moss);
+    padding: 6px 14px;
+    border-radius: 20px;
+  }
+  .pulse { width: 7px; height: 7px; background: var(--lime); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(138,184,74,0.6)} 50%{box-shadow:0 0 0 5px rgba(138,184,74,0)} }
+
+  /* ── LAYOUT ── */
+  .workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── MAP ── */
+  #map {
+    flex: 1;
+    cursor: crosshair !important;
+    position: relative;
+    min-height: 400px;
+    z-index: 0;
+  }
+
+  .map-hint {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: var(--panel-bg);
+    border: 1px solid var(--moss);
+    color: var(--sprout);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    padding: 8px 20px;
+    border-radius: 20px;
+    pointer-events: none;
+    letter-spacing: 0.08em;
+    transition: opacity 0.4s;
+  }
+
+  /* ── SIDE PANEL ── */
+  .side-panel {
+    width: 340px;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--moss);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .panel-section {
+    padding: 22px 24px;
+    border-bottom: 1px solid rgba(90,138,58,0.2);
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--leaf);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* ── LOCATION CARD ── */
+  .location-card {
+    background: rgba(58,92,42,0.15);
+    border: 1px solid rgba(90,138,58,0.3);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--sprout);
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .location-card.active { border-color: var(--lime); background: rgba(90,138,58,0.2); }
+  .loc-icon { font-size: 1.4rem; }
+  .loc-text { line-height: 1.6; }
+  .loc-coords { color: var(--lime); font-size: 0.8rem; font-weight: 500; }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed rgba(90,138,58,0.4);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--lime);
+    background: rgba(90,138,58,0.1);
+  }
+  .upload-zone.has-image { border-style: solid; border-color: var(--moss); }
+  .upload-zone input { display: none; }
+
+  .upload-icon { font-size: 2rem; margin-bottom: 8px; }
+  .upload-text { font-size: 0.8rem; color: var(--sprout); line-height: 1.5; }
+  .upload-sub { font-size: 0.68rem; color: var(--leaf); margin-top: 4px; font-family: 'DM Mono', monospace; }
+
+  #preview-img {
+    width: 100%;
+    border-radius: 8px;
+    display: none;
+    max-height: 160px;
+    object-fit: cover;
+  }
+
+  /* ── SCAN BUTTON ── */
+  .scan-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--moss), var(--leaf));
+    border: none;
+    border-radius: 10px;
+    color: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .scan-btn:hover:not(:disabled) { background: linear-gradient(135deg, var(--leaf), var(--lime)); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(90,138,58,0.4); }
+  .scan-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .scan-btn.loading { animation: btnpulse 1.2s infinite; }
+  @keyframes btnpulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  /* ── RESULTS ── */
+  .results-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--moss) transparent;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--leaf);
+    font-size: 0.78rem;
+    font-family: 'DM Mono', monospace;
+    text-align: center;
+    gap: 12px;
+    opacity: 0.6;
+  }
+  .empty-state .big-icon { font-size: 3rem; opacity: 0.4; }
+
+  /* ── DETECTION CARD ── */
+  .detection-card {
+    background: rgba(58,92,42,0.2);
+    border: 1px solid var(--moss);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    animation: slideIn 0.4s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  .det-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .det-class {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    color: var(--sprout);
+    text-transform: capitalize;
+  }
+  .det-conf {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(90,138,58,0.3);
+    color: var(--lime);
+  }
+  .det-conf.high { background: rgba(90,138,58,0.3); color: var(--lime); }
+  .det-conf.mid  { background: rgba(212,168,67,0.2); color: var(--gold); }
+  .det-conf.low  { background: rgba(196,74,42,0.2);  color: var(--danger); }
+
+  .conf-bar { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+  .conf-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+  .conf-fill.high { background: linear-gradient(90deg, var(--moss), var(--lime)); }
+  .conf-fill.mid  { background: linear-gradient(90deg, #8a6820, var(--gold)); }
+  .conf-fill.low  { background: linear-gradient(90deg, #8a2a10, var(--danger)); }
+
+  .det-location {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--leaf);
+    margin-top: 8px;
+  }
+
+  /* ── SAVED LOG ── */
+  .log-list { max-height: 200px; overflow-y: auto; }
+  .log-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: rgba(58,92,42,0.1);
+    border: 1px solid rgba(90,138,58,0.15);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--sprout);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .log-item:hover { background: rgba(58,92,42,0.25); border-color: var(--moss); }
+  .log-dot { width: 8px; height: 8px; background: var(--lime); border-radius: 50%; flex-shrink: 0; }
+  .log-dot.weed { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+  .log-info { flex: 1; line-height: 1.5; }
+  .log-name { color: var(--cream); font-size: 0.72rem; }
+
+  .no-logs { color: var(--leaf); font-size: 0.72rem; opacity: 0.5; font-family: 'DM Mono', monospace; }
+
+  /* ── LEAFLET CUSTOM ── */
+  .leaflet-container { background: #1a2010 !important; }
+  .weed-marker {
+    background: var(--danger);
+    border: 2px solid var(--cream);
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 2px 8px rgba(196,74,42,0.6);
+  }
+  .pending-marker {
+    background: var(--gold);
+    border: 2px solid var(--cream);
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(212,168,67,0.8);
+    animation: glowpulse 1.5s infinite;
+  }
+  @keyframes glowpulse { 0%,100%{box-shadow:0 0 12px rgba(212,168,67,0.8)} 50%{box-shadow:0 0 20px rgba(212,168,67,1)} }
+
+  .leaflet-popup-content-wrapper {
+    background: var(--bark) !important;
+    border: 1px solid var(--moss) !important;
+    color: var(--cream) !important;
+    font-family: 'DM Sans', sans-serif !important;
+    border-radius: 10px !important;
+  }
+  .leaflet-popup-tip { background: var(--bark) !important; }
+  .leaflet-popup-content { font-size: 0.8rem !important; line-height: 1.6 !important; }
+  .popup-title { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--sprout); margin-bottom: 4px; }
+  .popup-conf { color: var(--lime); font-family: 'DM Mono', monospace; font-size: 0.72rem; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--moss); border-radius: 2px; }
+
+  .step-indicator {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .step { flex: 1; height: 3px; border-radius: 2px; background: rgba(90,138,58,0.2); transition: background 0.4s; }
+  .step.done { background: var(--lime); }
+  .step.active { background: var(--gold); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    WeedScan
+  </div>
+  <div class="nav-stats">
+    <div class="stat-item">
+      <span class="stat-value" id="total-scans">0</span>
+      <span>scans</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value" id="total-weeds">0</span>
+      <span>weeds found</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value" id="total-pins">0</span>
+      <span>locations</span>
+    </div>
+  </div>
+  <div class="status-badge">
+    <div class="pulse"></div>
+    API CONNECTED · localhost:8000
+  </div>
+</header>
+
+<div class="workspace">
+  <div id="map">
+    <div class="map-hint" id="map-hint">📍 Click anywhere on the map to select a field location</div>
+  </div>
+
+  <div class="side-panel">
+
+    <!-- STEP INDICATOR -->
+    <div class="panel-section" style="padding-bottom:16px">
+      <div class="step-indicator">
+        <div class="step active" id="step1"></div>
+        <div class="step" id="step2"></div>
+        <div class="step" id="step3"></div>
+      </div>
+      <div class="section-label">Selected Location</div>
+      <div class="location-card" id="location-card">
+        <div class="loc-icon">🗺️</div>
+        <div class="loc-text">Click on the map to pin a field location</div>
+      </div>
+    </div>
+
+    <!-- UPLOAD -->
+    <div class="panel-section">
+      <div class="section-label">Field Image</div>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)">
+        <div id="upload-placeholder">
+          <div class="upload-icon">🌿</div>
+          <div class="upload-text">Drop or click to upload field image</div>
+          <div class="upload-sub">JPG · PNG · WEBP</div>
+        </div>
+        <img id="preview-img" alt="preview">
+      </div>
+      <button class="scan-btn" id="scan-btn" disabled onclick="runScan()">
+        <span id="scan-icon">🔍</span>
+        <span id="scan-text">Scan for Weeds</span>
+      </button>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results-area" id="results-area">
+      <div class="section-label">Detection Results</div>
+      <div class="empty-state" id="empty-state">
+        <div class="big-icon">🌾</div>
+        <div>Select a location on the map<br>then upload and scan an image</div>
+      </div>
+      <div id="detections-list"></div>
+    </div>
+
+    <!-- LOG -->
+    <div class="panel-section" style="padding-bottom:18px">
+      <div class="section-label">Saved Locations</div>
+      <div class="log-list" id="log-list">
+        <div class="no-logs">No locations saved yet</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── STATE ──
+  let selectedLat = null, selectedLng = null;
+  let pendingMarker = null;
+  let selectedFile = null;
+  let savedLocations = [];
+  let totalScans = 0, totalWeeds = 0;
+
+  // ── MAP INIT ──
+  const map = L.map('map', { zoomControl: true }).setView([20.5937, 78.9629], 5);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+  }).addTo(map);
+
+  setTimeout(() => map.invalidateSize(), 300);
+
+  // ── MAP CLICK ──
+  map.on('click', function(e) {
+    selectedLat = e.latlng.lat;
+    selectedLng = e.latlng.lng;
+
+    if (pendingMarker) map.removeLayer(pendingMarker);
+
+    const icon = L.divIcon({ className: 'pending-marker', iconSize: [14,14] });
+    pendingMarker = L.marker([selectedLat, selectedLng], { icon }).addTo(map);
+
+    // Update UI
+    document.getElementById('location-card').className = 'location-card active';
+    document.getElementById('location-card').innerHTML = `
+      <div class="loc-icon">📍</div>
+      <div class="loc-text">
+        Location selected<br>
+        <span class="loc-coords">${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}</span>
+      </div>
+    `;
+
+    document.getElementById('map-hint').style.opacity = '0';
+    document.getElementById('step1').className = 'step done';
+    document.getElementById('step2').className = 'step active';
+
+    updateScanBtn();
+  });
+
+  // ── FILE HANDLING ──
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    selectedFile = file;
+
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const img = document.getElementById('preview-img');
+      img.src = ev.target.result;
+      img.style.display = 'block';
+      document.getElementById('upload-placeholder').style.display = 'none';
+      document.getElementById('upload-zone').classList.add('has-image');
+    };
+    reader.readAsDataURL(file);
+
+    document.getElementById('step2').className = 'step done';
+    document.getElementById('step3').className = 'step active';
+    updateScanBtn();
+  }
+
+  // drag & drop
+  const zone = document.getElementById('upload-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) { selectedFile = file; const dt = new DataTransfer(); dt.items.add(file); document.getElementById('file-input').files = dt.files; handleFile({target:{files:[file]}}); }
+  });
+
+  function updateScanBtn() {
+    const btn = document.getElementById('scan-btn');
+    btn.disabled = !(selectedLat && selectedFile);
+  }
+
+  // ── SCAN ──
+  async function runScan() {
+    if (!selectedLat || !selectedFile) return;
+
+    const btn = document.getElementById('scan-btn');
+    btn.disabled = true;
+    btn.classList.add('loading');
+    document.getElementById('scan-icon').textContent = '⏳';
+    document.getElementById('scan-text').textContent = 'Scanning...';
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('detections-list').innerHTML = '';
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/predict', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      totalScans++;
+      document.getElementById('total-scans').textContent = totalScans;
+
+      const detections = data.detections || [];
+      showResults(detections);
+      saveLocation(detections);
+
+    } catch (err) {
+      document.getElementById('detections-list').innerHTML = `
+        <div class="detection-card" style="border-color:var(--danger)">
+          <div class="det-header"><span class="det-class">⚠️ Connection Error</span></div>
+          <div style="font-size:0.72rem;color:var(--leaf);font-family:'DM Mono',monospace">
+            Make sure backend is running at localhost:8000
+          </div>
+        </div>`;
+    }
+
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    document.getElementById('scan-icon').textContent = '🔍';
+    document.getElementById('scan-text').textContent = 'Scan Again';
+    document.getElementById('step3').className = 'step done';
+  }
+
+  function showResults(detections) {
+    const list = document.getElementById('detections-list');
+
+    if (detections.length === 0) {
+      list.innerHTML = `
+        <div class="detection-card">
+          <div class="det-header"><span class="det-class">✅ No Weeds Detected</span></div>
+          <div style="font-size:0.72rem;color:var(--leaf);font-family:'DM Mono',monospace">Field looks clean!</div>
+        </div>`;
+      return;
+    }
+
+    totalWeeds += detections.length;
+    document.getElementById('total-weeds').textContent = totalWeeds;
+
+    detections.forEach(det => {
+      const conf = det.confidence;
+      const level = conf >= 0.75 ? 'high' : conf >= 0.5 ? 'mid' : 'low';
+      const pct = Math.round(conf * 100);
+      list.innerHTML += `
+        <div class="detection-card">
+          <div class="det-header">
+            <span class="det-class">${det.class}</span>
+            <span class="det-conf ${level}">${pct}%</span>
+          </div>
+          <div class="conf-bar"><div class="conf-fill ${level}" style="width:${pct}%"></div></div>
+          <div class="det-location">📍 ${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)}</div>
+        </div>`;
+    });
+  }
+
+  function saveLocation(detections) {
+    const hasWeeds = detections.length > 0;
+    const topClass = hasWeeds ? detections[0].class : 'clean';
+    const topConf  = hasWeeds ? Math.round(detections[0].confidence * 100) : 0;
+
+    // Add weed marker on map
+    if (pendingMarker) map.removeLayer(pendingMarker);
+    pendingMarker = null;
+
+    if (hasWeeds) {
+      const icon = L.divIcon({ className: 'weed-marker', iconSize: [14,14] });
+      const marker = L.marker([selectedLat, selectedLng], { icon }).addTo(map);
+      marker.bindPopup(`
+        <div class="popup-title">🌿 ${topClass}</div>
+        <div class="popup-conf">Confidence: ${topConf}%</div>
+        <div style="font-size:0.68rem;color:#8ab84a;margin-top:4px">${detections.length} weed(s) found</div>
+      `);
+    }
+
+    // Save to log
+    const entry = { lat: selectedLat, lng: selectedLng, detections, topClass, topConf, hasWeeds, time: new Date() };
+    savedLocations.push(entry);
+    document.getElementById('total-pins').textContent = savedLocations.length;
+    renderLog();
+  }
+
+  function renderLog() {
+    const logList = document.getElementById('log-list');
+    logList.innerHTML = '';
+
+    if (savedLocations.length === 0) {
+      logList.innerHTML = '<div class="no-logs">No locations saved yet</div>';
+      return;
+    }
+
+    [...savedLocations].reverse().forEach((loc, i) => {
+      const idx = savedLocations.length - 1 - i;
+      logList.innerHTML += `
+        <div class="log-item" onclick="flyTo(${idx})">
+          <div class="log-dot ${loc.hasWeeds ? 'weed' : ''}"></div>
+          <div class="log-info">
+            <div class="log-name">${loc.hasWeeds ? loc.topClass : 'No weeds'}</div>
+            <div>${loc.lat.toFixed(3)}, ${loc.lng.toFixed(3)}</div>
+          </div>
+        </div>`;
+    });
+  }
+
+  function flyTo(idx) {
+    const loc = savedLocations[idx];
+    map.flyTo([loc.lat, loc.lng], 14, { duration: 1.2 });
+  }
+</script>
+</body>
+</html>

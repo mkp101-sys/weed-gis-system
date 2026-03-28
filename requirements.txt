@@ -1,0 +1,8 @@
+streamlit
+ultralytics
+folium
+streamlit-folium
+gdown
+pillow
+torch
+torchvision
