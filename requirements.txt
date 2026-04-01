@@ -7,4 +7,3 @@ pandas
 gdown
 folium
 streamlit-folium
-python-3.10
