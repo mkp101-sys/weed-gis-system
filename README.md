@@ -126,23 +126,6 @@ Precision Herbicide Application
 
 ---
 
-## 📂 Project Structure
-
-```text
-WeedScan/
-│
-├── streamlit_app.py
-├── app.py
-├── best.pt
-├── requirements.txt
-├── detections/
-├── outputs/
-├── maps/
-├── data/
-├── notebooks/
-├── assets/
-└── README.md
-```
 
 ---
 
@@ -286,29 +269,7 @@ Features:
 - GPS coordinate plotting
 - Detection popups and summaries
 
----
 
-## 📸 Screenshots
-
-Add your screenshots here:
-
-### Streamlit Interface
-
-```markdown
-![Streamlit App](images/streamlit_app.png)
-```
-
-### Detection Results
-
-```markdown
-![Detection](images/detection_result.png)
-```
-
-### GIS Map
-
-```markdown
-![GIS Map](images/gis_map.png)
-```
 
 ---
 
